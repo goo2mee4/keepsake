@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f5efe3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Keepsake</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     KEEPSAKE  —  a quiet place for the things you're letting go
+     Single-file app. No build step, no dependencies (fonts aside).
+     Everything you add is stored on THIS device via IndexedDB.
+     ============================================================ */
+
+  :root{
+    --paper:    #f5efe3;
+    --paper-2:  #efe7d6;
+    --card:     #fbf7ee;
+    --ink:      #2a2521;
+    --ink-soft: #756b5d;
+    --line:     #e1d6c1;
+    --line-2:   #d6c9b0;
+
+    --place:      #b5523a;   /* place tags  */
+    --place-tint: #f1dcd2;
+    --time:       #3f7a6d;   /* time tags   */
+    --time-tint:  #d9e8e1;
+    --gold:       #c08a2c;
+    --rec:        #c0392b;
+
+    --shadow: 0 1px 2px rgba(58,46,33,.06), 0 8px 24px -12px rgba(58,46,33,.22);
+    --radius: 16px;
+    --maxw: 1100px;
+    --serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --sans:  "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:var(--sans);
+    color:var(--ink);
+    background-color:var(--paper);
+    /* faint paper grain */
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(192,138,44,.05), transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(63,122,109,.05), transparent 45%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  button{ font-family:inherit; cursor:pointer; }
+
+  /* ---------- header ---------- */
+  header.app{
+    max-width:var(--maxw); margin:0 auto;
+    padding:32px 22px 8px; text-align:center;
+  }
+  .logo{
+    font-family:var(--serif); font-style:italic; font-weight:500;
+    font-size:clamp(38px,7vw,58px); letter-spacing:-.01em; line-height:1;
+    color:var(--ink); margin:0;
+  }
+  .logo .dot{ color:var(--place); }
+  .tagline{
+    color:var(--ink-soft); font-size:15px; margin:10px 0 0;
+    font-style:italic; font-family:var(--serif);
+  }
+  .count{
+    display:inline-block; margin-top:14px; font-size:13px; letter-spacing:.04em;
+    text-transform:uppercase; color:var(--ink-soft);
+  }
+  .count b{ color:var(--ink); font-weight:700; }
+
+  /* ---------- toolbar ---------- */
+  .toolbar{
+    max-width:var(--maxw); margin:18px auto 0; padding:0 22px;
+    display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+  }
+  .search{
+    flex:1 1 240px; min-width:0; position:relative;
+  }
+  .search input{
+    width:100%; padding:13px 16px 13px 42px; border:1px solid var(--line-2);
+    border-radius:999px; background:var(--card); color:var(--ink);
+    font-size:15px; font-family:inherit; outline:none; transition:border-color .15s, box-shadow .15s;
+  }
+  .search input:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(192,138,44,.15); }
+  .search svg{ position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--ink-soft); }
+
+  .btn-add{
+    flex:0 0 auto; display:inline-flex; align-items:center; gap:9px;
+    background:var(--ink); color:var(--paper); border:none;
+    padding:13px 20px; border-radius:999px; font-size:15px; font-weight:600;
+    box-shadow:var(--shadow); transition:transform .12s, background .15s;
+  }
+  .btn-add:hover{ transform:translateY(-1px); background:#1f1b17; }
+  .btn-add:active{ transform:translateY(0); }
+  .btn-add svg{ width:18px; height:18px; }
+
+  /* ---------- active filters ---------- */
+  .filters{
+    max-width:var(--maxw); margin:14px auto 0; padding:0 22px;
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  }
+  .filters:empty{ display:none; }
+  .filters .lbl{ font-size:13px; color:var(--ink-soft); }
+  .clear-filters{
+    background:none; border:none; color:var(--place); font-size:13px;
+    text-decoration:underline; padding:2px 4px;
+  }
+
+  /* ---------- chips ---------- */
+  .chip{
+    display:inline-flex; align-items:center; gap:6px;
+    padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:600;
+    border:1px solid transparent; white-space:nowrap; line-height:1.4;
+  }
+  .chip.place{ background:var(--place-tint); color:var(--place); border-color:#e7c6ba; }
+  .chip.time { background:var(--time-tint);  color:var(--time);  border-color:#bcd7cc; }
+  .chip-btn{ cursor:pointer; }
+  .chip-btn:hover{ filter:brightness(.97); }
+  .chip .x{ font-weight:700; opacity:.6; cursor:pointer; }
+  .chip .x:hover{ opacity:1; }
+
+  /* ---------- gallery ---------- */
+  main{ max-width:var(--maxw); margin:0 auto; padding:22px; }
+  .gallery{
+    display:grid; gap:18px;
+    grid-template-columns:repeat(auto-fill, minmax(220px,1fr));
+  }
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    overflow:hidden; box-shadow:var(--shadow); cursor:pointer;
+    transition:transform .16s ease, box-shadow .16s ease;
+    display:flex; flex-direction:column;
+    animation:rise .5s cubic-bezier(.2,.7,.2,1) both;
+  }
+  @keyframes rise{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  .card:hover{ transform:translateY(-3px); box-shadow:0 2px 4px rgba(58,46,33,.08), 0 18px 34px -16px rgba(58,46,33,.32); }
+  .card .cover{
+    aspect-ratio:4/3; background:var(--paper-2); position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .card .cover img, .card .cover video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .cover .placeholder{ color:var(--line-2); }
+  .cover .badges{
+    position:absolute; top:8px; right:8px; display:flex; gap:5px;
+  }
+  .cover .badge{
+    background:rgba(42,37,33,.78); color:#fff; border-radius:999px;
+    font-size:11px; font-weight:600; padding:3px 8px; display:flex; align-items:center; gap:4px;
+    backdrop-filter:blur(2px);
+  }
+  .card .body{ padding:13px 14px 15px; display:flex; flex-direction:column; gap:9px; }
+  .card .title{
+    font-family:var(--serif); font-weight:600; font-size:18px; line-height:1.25;
+    margin:0; color:var(--ink);
+  }
+  .card .title.untitled{ font-style:italic; color:var(--ink-soft); font-weight:400; }
+  .card .chips{ display:flex; flex-wrap:wrap; gap:5px; }
+  .card .date{ font-size:12px; color:var(--ink-soft); margin-top:1px; }
+
+  /* ---------- empty state ---------- */
+  .empty{
+    text-align:center; padding:60px 20px; color:var(--ink-soft);
+    grid-column:1/-1;
+  }
+  .empty svg{ color:var(--line-2); margin-bottom:14px; }
+  .empty h2{ font-family:var(--serif); font-style:italic; font-weight:400; color:var(--ink); font-size:24px; margin:0 0 6px; }
+  .empty p{ margin:0 auto; max-width:360px; font-size:15px; }
+
+  /* ---------- modal shell ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(42,37,33,.42); backdrop-filter:blur(3px);
+    display:flex; align-items:flex-end; justify-content:center; z-index:50;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+  @media(min-width:640px){ .overlay{ align-items:center; padding:24px; } }
+  .sheet{
+    background:var(--paper); width:100%; max-width:680px; max-height:92vh; overflow-y:auto;
+    border-radius:22px 22px 0 0; box-shadow:0 -10px 50px -10px rgba(0,0,0,.4);
+    transform:translateY(24px); transition:transform .25s cubic-bezier(.2,.7,.2,1);
+    -webkit-overflow-scrolling:touch;
+  }
+  @media(min-width:640px){ .sheet{ border-radius:22px; } }
+  .overlay.show .sheet{ transform:none; }
+  .sheet-head{
+    position:sticky; top:0; background:var(--paper); z-index:2;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:18px 20px 14px; border-bottom:1px solid var(--line);
+  }
+  .sheet-head h3{ font-family:var(--serif); font-style:italic; font-weight:500; font-size:22px; margin:0; }
+  .icon-btn{
+    border:none; background:var(--paper-2); color:var(--ink); width:36px; height:36px;
+    border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .icon-btn:hover{ background:var(--line); }
+  .sheet-body{ padding:20px; display:flex; flex-direction:column; gap:22px; }
+
+  /* ---------- form ---------- */
+  .field label{ display:block; font-size:13px; font-weight:600; letter-spacing:.02em; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; }
+  .field input[type=text], .field textarea{
+    width:100%; padding:12px 14px; border:1px solid var(--line-2); border-radius:12px;
+    background:var(--card); color:var(--ink); font-size:15.5px; font-family:inherit; outline:none;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input[type=text]:focus, .field textarea:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(192,138,44,.15); }
+  .field textarea{ resize:vertical; min-height:74px; line-height:1.5; }
+  .hint{ font-size:12.5px; color:var(--ink-soft); margin:7px 0 0; }
+
+  /* media capture buttons */
+  .capture-row{ display:flex; gap:10px; flex-wrap:wrap; }
+  .cap-btn{
+    flex:1 1 0; min-width:120px; display:flex; align-items:center; justify-content:center; gap:8px;
+    padding:14px; border:1.5px dashed var(--line-2); border-radius:12px; background:var(--card);
+    color:var(--ink); font-size:14.5px; font-weight:600; transition:border-color .15s, background .15s;
+  }
+  .cap-btn:hover{ border-color:var(--gold); background:#fffdf7; }
+  .cap-btn svg{ width:20px; height:20px; color:var(--gold); }
+
+  .media-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(86px,1fr)); gap:8px; margin-top:12px; }
+  .media-grid:empty{ display:none; }
+  .thumb{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:var(--paper-2); border:1px solid var(--line); }
+  .thumb img,.thumb video{ width:100%; height:100%; object-fit:cover; }
+  .thumb .del{
+    position:absolute; top:3px; right:3px; width:22px; height:22px; border-radius:50%;
+    background:rgba(42,37,33,.8); color:#fff; border:none; font-size:13px; line-height:1;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .thumb .vid-ico{ position:absolute; bottom:4px; left:4px; color:#fff; filter:drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+
+  /* recorder */
+  .recorder{ display:flex; flex-direction:column; gap:10px; }
+  .rec-btn{
+    display:inline-flex; align-items:center; gap:10px; align-self:flex-start;
+    padding:12px 18px; border-radius:999px; border:none; font-size:15px; font-weight:600;
+    background:var(--rec); color:#fff; transition:transform .12s, filter .15s;
+  }
+  .rec-btn:hover{ filter:brightness(1.05); }
+  .rec-btn.recording{ background:#7a1f16; }
+  .rec-dot{ width:11px; height:11px; border-radius:50%; background:#fff; }
+  .rec-btn.recording .rec-dot{ animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.35; transform:scale(.8); } }
+  .rec-unavailable{
+    font-size:13px; color:var(--ink-soft); background:var(--paper-2); border:1px solid var(--line);
+    border-radius:10px; padding:11px 13px; line-height:1.45;
+  }
+  .voice-list{ display:flex; flex-direction:column; gap:9px; }
+  .voice-item{
+    display:flex; align-items:center; gap:10px; background:var(--card);
+    border:1px solid var(--line); border-radius:12px; padding:9px 11px;
+  }
+  .voice-item audio{ flex:1; height:34px; }
+  .voice-item .vname{ font-size:13.5px; font-weight:600; white-space:nowrap; color:var(--ink-soft); }
+  .voice-item .del{ border:none; background:none; color:var(--ink-soft); font-size:18px; padding:2px 4px; }
+  .voice-item .del:hover{ color:var(--place); }
+
+  /* tag input */
+  .tagbox{
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+    border:1px solid var(--line-2); border-radius:12px; background:var(--card); padding:8px 10px;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .tagbox.focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(192,138,44,.15); }
+  .tagbox input{ border:none; outline:none; background:none; flex:1; min-width:90px; font-size:15px; font-family:inherit; color:var(--ink); padding:4px 2px; }
+
+  /* footer actions in form */
+  .sheet-foot{
+    position:sticky; bottom:0; background:var(--paper); border-top:1px solid var(--line);
+    padding:14px 20px; display:flex; gap:10px; justify-content:space-between; align-items:center;
+  }
+  .btn{
+    padding:12px 22px; border-radius:999px; font-size:15px; font-weight:600; border:1px solid transparent;
+  }
+  .btn-primary{ background:var(--ink); color:var(--paper); }
+  .btn-primary:hover{ background:#1f1b17; }
+  .btn-ghost{ background:none; color:var(--ink-soft); border-color:var(--line-2); }
+  .btn-ghost:hover{ background:var(--paper-2); }
+  .btn-danger{ background:none; color:var(--place); border:none; font-size:14px; }
+  .btn-danger:hover{ text-decoration:underline; }
+
+  /* ---------- detail view ---------- */
+  .detail-media{ display:flex; flex-direction:column; gap:12px; }
+  .detail-media img, .detail-media video{ width:100%; border-radius:14px; background:#000; max-height:60vh; object-fit:contain; }
+  .detail-section h4{
+    font-size:12.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft);
+    margin:0 0 9px; font-weight:700;
+  }
+  .detail-title{ font-family:var(--serif); font-size:28px; font-weight:600; margin:0 0 4px; line-height:1.15; }
+  .detail-title.untitled{ font-style:italic; color:var(--ink-soft); font-weight:400; }
+  .detail-date{ font-size:13px; color:var(--ink-soft); margin:0; }
+  .detail-notes{ font-size:15.5px; line-height:1.6; white-space:pre-wrap; color:var(--ink); }
+  .detail-chips{ display:flex; flex-wrap:wrap; gap:7px; }
+
+  .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1 class="logo">Keepsake<span class="dot">.</span></h1>
+  <p class="tagline">Keep the story. Let the thing go.</p>
+  <div class="count"><b id="countNum">0</b> things kept</div>
+</header>
+
+<div class="toolbar">
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input id="searchInput" type="text" placeholder="Search titles, notes, tags…" autocomplete="off">
+  </div>
+  <button class="btn-add" id="addBtn">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+    Add something
+  </button>
+</div>
+
+<div class="filters" id="filters"></div>
+
+<main>
+  <div class="gallery" id="gallery"></div>
+</main>
+
+<!-- ===== ADD / EDIT SHEET ===== -->
+<div class="overlay" id="formOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h3 id="formTitle">Add something</h3>
+      <button class="icon-btn" id="formClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="sheet-body">
+
+      <div class="field">
+        <label>Photos &amp; videos</label>
+        <div class="capture-row">
+          <button class="cap-btn" id="photoBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8a2 2 0 0 1 2-2h2l1.5-2h7L19 6h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="13" cy="13" r="3.5"/></svg>
+            Photo
+          </button>
+          <button class="cap-btn" id="videoBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-3v10l-6-3z"/></svg>
+            Video
+          </button>
+        </div>
+        <input class="visually-hidden" id="photoInput" type="file" accept="image/*" capture="environment" multiple>
+        <input class="visually-hidden" id="videoInput" type="file" accept="video/*" capture="environment">
+        <div class="media-grid" id="mediaGrid"></div>
+      </div>
+
+      <div class="field">
+        <label>Voice notes</label>
+        <div class="recorder" id="recorder">
+          <button class="rec-btn" id="recBtn" type="button"><span class="rec-dot"></span><span id="recLabel">Record a voice note</span></button>
+          <div class="rec-unavailable" id="recUnavailable" style="display:none"></div>
+          <input class="visually-hidden" id="audioInput" type="file" accept="audio/*">
+          <div class="voice-list" id="voiceList"></div>
+        </div>
+        <p class="hint">Describe the item out loud — where it came from, who it belonged to, why it mattered.</p>
+      </div>
+
+      <div class="field">
+        <label for="titleInput">Title <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+        <input id="titleInput" type="text" placeholder="Grandma's blue teapot">
+      </div>
+
+      <div class="field">
+        <label>Place tags</label>
+        <div class="tagbox" data-kind="place" id="placeBox">
+          <input type="text" placeholder="e.g. Lake house, Mum's kitchen…" autocomplete="off">
+        </div>
+        <p class="hint">Where this item lived or where it came from. Press Enter or comma to add.</p>
+      </div>
+
+      <div class="field">
+        <label>Time tags</label>
+        <div class="tagbox" data-kind="time" id="timeBox">
+          <input type="text" placeholder="e.g. Childhood, 1990s, College years…" autocomplete="off">
+        </div>
+        <p class="hint">When it's from, or the era it belongs to.</p>
+      </div>
+
+      <div class="field">
+        <label for="notesInput">Written note <span style="text-transform:none;font-weight:400;">(optional)</span></label>
+        <textarea id="notesInput" placeholder="Anything you'd rather type than say."></textarea>
+      </div>
+
+    </div>
+    <div class="sheet-foot">
+      <button class="btn-danger" id="deleteBtn" style="display:none">Delete</button>
+      <div style="display:flex; gap:10px; margin-left:auto;">
+        <button class="btn btn-ghost" id="cancelBtn">Cancel</button>
+        <button class="btn btn-primary" id="saveBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DETAIL SHEET ===== -->
+<div class="overlay" id="detailOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h3>&nbsp;</h3>
+      <div style="display:flex; gap:8px;">
+        <button class="icon-btn" id="detailEdit" aria-label="Edit" title="Edit">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </button>
+        <button class="icon-btn" id="detailClose" aria-label="Close">&times;</button>
+      </div>
+    </div>
+    <div class="sheet-body" id="detailBody"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   1. STORAGE  —  IndexedDB wrapper
+   Entries and their media blobs all live on this device.
+   ============================================================ */
+const DB_NAME = "keepsake", STORE = "entries", DB_VERSION = 1;
+let _db = null;
+
+function openDB(){
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(STORE)){
+        db.createObjectStore(STORE, { keyPath:"id" });
+      }
+    };
+    req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+    req.onerror   = e => reject(e.target.error);
+  });
+}
+function tx(mode){ return _db.transaction(STORE, mode).objectStore(STORE); }
+function putEntry(entry){
+  return new Promise((res, rej) => { const r = tx("readwrite").put(entry); r.onsuccess = res; r.onerror = () => rej(r.error); });
+}
+function deleteEntry(id){
+  return new Promise((res, rej) => { const r = tx("readwrite").delete(id); r.onsuccess = res; r.onerror = () => rej(r.error); });
+}
+function getAll(){
+  return new Promise((res, rej) => { const r = tx("readonly").getAll(); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); });
+}
+
+/* ============================================================
+   2. STATE
+   ============================================================ */
+let entries = [];                 // all entries, loaded from DB
+let editingId = null;             // id being edited, or null for new
+let draftMedia = [];              // [{id, kind:'image'|'video'|'audio', blob, mime}]
+let draftPlace = [];              // string[]
+let draftTime  = [];              // string[]
+let activeFilters = new Set();    // "place:Lake house" / "time:1990s"
+let searchTerm = "";
+const urlCache = new Map();       // blob -> objectURL (revoked on overlay close)
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+function blobURL(blob){
+  if(!urlCache.has(blob)) urlCache.set(blob, URL.createObjectURL(blob));
+  return urlCache.get(blob);
+}
+function clearURLs(){ for(const u of urlCache.values()) URL.revokeObjectURL(u); urlCache.clear(); }
+
+function fmtDate(ts){
+  return new Date(ts).toLocaleDateString(undefined, { year:"numeric", month:"long", day:"numeric" });
+}
+
+/* ============================================================
+   3. GALLERY RENDER
+   ============================================================ */
+const $ = sel => document.querySelector(sel);
+const gallery = $("#gallery"), filtersEl = $("#filters"), countNum = $("#countNum");
+
+function matchesFilters(e){
+  if(searchTerm){
+    const hay = [e.title, e.notes, ...(e.placeTags||[]), ...(e.timeTags||[])].join(" ").toLowerCase();
+    if(!hay.includes(searchTerm)) return false;
+  }
+  for(const f of activeFilters){
+    const [kind, ...rest] = f.split(":"); const val = rest.join(":");
+    const list = kind === "place" ? (e.placeTags||[]) : (e.timeTags||[]);
+    if(!list.includes(val)) return false;
+  }
+  return true;
+}
+
+function coverFor(e){
+  const img = (e.media||[]).find(m => m.kind === "image");
+  if(img) return `<img src="${blobURL(img.blob)}" alt="">`;
+  const vid = (e.media||[]).find(m => m.kind === "video");
+  if(vid) return `<video src="${blobURL(vid.blob)}" muted playsinline preload="metadata"></video>`;
+  return `<svg class="placeholder" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18V8a2 2 0 0 1 2-2h3l2-2h4l2 2h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>`;
+}
+
+function countMedia(e, kind){ return (e.media||[]).filter(m => m.kind === kind).length; }
+
+function render(){
+  countNum.textContent = entries.length;
+  // filters bar
+  filtersEl.innerHTML = "";
+  if(activeFilters.size){
+    const lbl = document.createElement("span"); lbl.className = "lbl"; lbl.textContent = "Filtering by:"; filtersEl.appendChild(lbl);
+    for(const f of activeFilters){
+      const [kind, ...rest] = f.split(":"); const val = rest.join(":");
+      const c = document.createElement("span"); c.className = `chip ${kind}`;
+      c.innerHTML = `${val} <span class="x">&times;</span>`;
+      c.querySelector(".x").onclick = () => { activeFilters.delete(f); render(); };
+      filtersEl.appendChild(c);
+    }
+    const clr = document.createElement("button"); clr.className = "clear-filters"; clr.textContent = "clear all";
+    clr.onclick = () => { activeFilters.clear(); render(); };
+    filtersEl.appendChild(clr);
+  }
+
+  const list = entries.filter(matchesFilters).sort((a,b) => b.createdAt - a.createdAt);
+  gallery.innerHTML = "";
+
+  if(list.length === 0){
+    gallery.innerHTML = `<div class="empty">
+      <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M20 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/><path d="M8 7V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M3 12h18"/></svg>
+      <h2>${entries.length === 0 ? "Nothing kept yet" : "Nothing matches"}</h2>
+      <p>${entries.length === 0 ? "Pick up an object, snap a photo, and tell its story. Then you can set the object free." : "Try a different search or clear your filters."}</p>
+    </div>`;
+    return;
+  }
+
+  list.forEach((e, i) => {
+    const card = document.createElement("div");
+    card.className = "card"; card.style.animationDelay = `${Math.min(i,12)*40}ms`;
+    const vids = countMedia(e,"video"), auds = countMedia(e,"audio");
+    const badges = [];
+    if(vids) badges.push(`<span class="badge">▶ ${vids}</span>`);
+    if(auds) badges.push(`<span class="badge">🎙 ${auds}</span>`);
+    const chips = [
+      ...(e.placeTags||[]).map(t => `<span class="chip place">${escapeHTML(t)}</span>`),
+      ...(e.timeTags ||[]).map(t => `<span class="chip time">${escapeHTML(t)}</span>`)
+    ].slice(0,4).join("");
+    card.innerHTML = `
+      <div class="cover">${coverFor(e)}<div class="badges">${badges.join("")}</div></div>
+      <div class="body">
+        <h3 class="title ${e.title ? "" : "untitled"}">${e.title ? escapeHTML(e.title) : "Untitled"}</h3>
+        <div class="chips">${chips}</div>
+        <div class="date">${fmtDate(e.createdAt)}</div>
+      </div>`;
+    card.onclick = () => openDetail(e.id);
+    gallery.appendChild(card);
+  });
+}
+
+function escapeHTML(s){ return (s||"").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+
+/* ============================================================
+   4. DETAIL VIEW
+   ============================================================ */
+const detailOverlay = $("#detailOverlay"), detailBody = $("#detailBody");
+let detailId = null;
+
+function openDetail(id){
+  const e = entries.find(x => x.id === id); if(!e) return;
+  detailId = id;
+  const media = (e.media||[]).map(m => {
+    if(m.kind === "image") return `<img src="${blobURL(m.blob)}" alt="">`;
+    if(m.kind === "video") return `<video src="${blobURL(m.blob)}" controls playsinline></video>`;
+    return "";
+  }).join("");
+  const voices = (e.media||[]).filter(m => m.kind === "audio");
+  const voiceHTML = voices.length ? `
+    <div class="detail-section">
+      <h4>Voice notes</h4>
+      <div class="voice-list">${voices.map((m,i) =>
+        `<div class="voice-item"><span class="vname">No. ${i+1}</span><audio controls src="${blobURL(m.blob)}"></audio></div>`
+      ).join("")}</div>
+    </div>` : "";
+  const tagHTML = (e.placeTags?.length || e.timeTags?.length) ? `
+    <div class="detail-section">
+      <h4>Tags</h4>
+      <div class="detail-chips">
+        ${(e.placeTags||[]).map(t => `<span class="chip place chip-btn" data-f="place:${escapeHTML(t)}">${escapeHTML(t)}</span>`).join("")}
+        ${(e.timeTags ||[]).map(t => `<span class="chip time chip-btn"  data-f="time:${escapeHTML(t)}">${escapeHTML(t)}</span>`).join("")}
+      </div>
+    </div>` : "";
+
+  detailBody.innerHTML = `
+    ${media ? `<div class="detail-media">${media}</div>` : ""}
+    <div class="detail-section">
+      <h3 class="detail-title ${e.title ? "" : "untitled"}">${e.title ? escapeHTML(e.title) : "Untitled"}</h3>
+      <p class="detail-date">${fmtDate(e.createdAt)}</p>
+    </div>
+    ${voiceHTML}
+    ${e.notes ? `<div class="detail-section"><h4>Note</h4><div class="detail-notes">${escapeHTML(e.notes)}</div></div>` : ""}
+    ${tagHTML}
+  `;
+  // tapping a tag filters the gallery
+  detailBody.querySelectorAll(".chip-btn").forEach(c => {
+    c.onclick = () => { activeFilters.add(c.dataset.f); closeDetail(); render(); window.scrollTo({top:0,behavior:"smooth"}); };
+  });
+  showOverlay(detailOverlay);
+}
+function closeDetail(){ hideOverlay(detailOverlay); }
+$("#detailClose").onclick = closeDetail;
+$("#detailEdit").onclick  = () => { const id = detailId; closeDetail(); openForm(id); };
+
+/* ============================================================
+   5. ADD / EDIT FORM
+   ============================================================ */
+const formOverlay = $("#formOverlay"), mediaGrid = $("#mediaGrid"), voiceList = $("#voiceList");
+
+function openForm(id){
+  editingId = id || null;
+  draftMedia = []; draftPlace = []; draftTime = [];
+  if(editingId){
+    const e = entries.find(x => x.id === editingId);
+    $("#formTitle").textContent = "Edit";
+    $("#titleInput").value = e.title || "";
+    $("#notesInput").value = e.notes || "";
+    draftMedia = (e.media||[]).map(m => ({...m}));
+    draftPlace = [...(e.placeTags||[])];
+    draftTime  = [...(e.timeTags||[])];
+    $("#deleteBtn").style.display = "inline-block";
+  } else {
+    $("#formTitle").textContent = "Add something";
+    $("#titleInput").value = ""; $("#notesInput").value = "";
+    $("#deleteBtn").style.display = "none";
+  }
+  renderDraftMedia(); renderDraftVoices(); renderTagBoxes();
+  showOverlay(formOverlay);
+}
+function closeForm(){ hideOverlay(formOverlay); }
+$("#formClose").onclick = closeForm;
+$("#cancelBtn").onclick = closeForm;
+$("#addBtn").onclick = () => openForm(null);
+
+/* ---- photo / video capture ---- */
+$("#photoBtn").onclick = () => $("#photoInput").click();
+$("#videoBtn").onclick = () => $("#videoInput").click();
+$("#photoInput").onchange = e => addFiles(e.target.files, "image");
+$("#videoInput").onchange = e => addFiles(e.target.files, "video");
+function addFiles(fileList, kind){
+  for(const f of fileList){ draftMedia.push({ id:uid(), kind, blob:f, mime:f.type }); }
+  renderDraftMedia();
+}
+function renderDraftMedia(){
+  const visual = draftMedia.filter(m => m.kind !== "audio");
+  mediaGrid.innerHTML = visual.map(m => `
+    <div class="thumb" data-id="${m.id}">
+      ${m.kind === "image"
+        ? `<img src="${blobURL(m.blob)}">`
+        : `<video src="${blobURL(m.blob)}" muted playsinline></video><span class="vid-ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>`}
+      <button class="del" data-id="${m.id}">&times;</button>
+    </div>`).join("");
+  mediaGrid.querySelectorAll(".del").forEach(b => b.onclick = () => {
+    draftMedia = draftMedia.filter(m => m.id !== b.dataset.id); renderDraftMedia();
+  });
+}
+
+/* ---- voice recording (MediaRecorder, needs HTTPS) ---- */
+let mediaRecorder = null, recChunks = [], recStream = null, recTimer = null, recSeconds = 0;
+const recBtn = $("#recBtn"), recLabel = $("#recLabel"), recUnavail = $("#recUnavailable");
+
+const canRecord = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+if(!canRecord){
+  recBtn.style.display = "none";
+  recUnavail.style.display = "block";
+  recUnavail.innerHTML = "In-app recording needs the app to be opened over <b>https://</b> (it's blocked when opening the file directly). For now you can attach an existing audio file, or host the app — then this turns into a one-tap recorder.";
+  recUnavail.insertAdjacentHTML("beforeend", ` <button class="cap-btn" style="margin-top:10px" id="audioFallback" type="button">Attach audio file</button>`);
+  document.getElementById("audioFallback").onclick = () => document.getElementById("audioInput").click();
+}
+$("#audioInput").onchange = e => { for(const f of e.target.files){ draftMedia.push({ id:uid(), kind:"audio", blob:f, mime:f.type }); } renderDraftVoices(); };
+
+recBtn.onclick = async () => {
+  if(mediaRecorder && mediaRecorder.state === "recording"){ stopRecording(); return; }
+  try{
+    recStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    const mime = ["audio/webm","audio/mp4","audio/ogg"].find(m => MediaRecorder.isTypeSupported(m)) || "";
+    mediaRecorder = new MediaRecorder(recStream, mime ? { mimeType:mime } : undefined);
+    recChunks = [];
+    mediaRecorder.ondataavailable = ev => { if(ev.data.size) recChunks.push(ev.data); };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+      draftMedia.push({ id:uid(), kind:"audio", blob, mime:blob.type });
+      renderDraftVoices();
+      recStream.getTracks().forEach(t => t.stop());
+    };
+    mediaRecorder.start();
+    recBtn.classList.add("recording"); recSeconds = 0;
+    recLabel.textContent = "Recording  0:00 — tap to stop";
+    recTimer = setInterval(() => {
+      recSeconds++;
+      const m = Math.floor(recSeconds/60), s = String(recSeconds%60).padStart(2,"0");
+      recLabel.textContent = `Recording  ${m}:${s} — tap to stop`;
+    }, 1000);
+  }catch(err){
+    alert("Couldn't access the microphone. Please allow microphone access and try again.");
+  }
+};
+function stopRecording(){
+  if(mediaRecorder && mediaRecorder.state === "recording") mediaRecorder.stop();
+  clearInterval(recTimer);
+  recBtn.classList.remove("recording");
+  recLabel.textContent = "Record a voice note";
+}
+function renderDraftVoices(){
+  const voices = draftMedia.filter(m => m.kind === "audio");
+  voiceList.innerHTML = voices.map((m,i) => `
+    <div class="voice-item" data-id="${m.id}">
+      <span class="vname">No. ${i+1}</span>
+      <audio controls src="${blobURL(m.blob)}"></audio>
+      <button class="del" data-id="${m.id}" title="Delete">&times;</button>
+    </div>`).join("");
+  voiceList.querySelectorAll(".del").forEach(b => b.onclick = () => {
+    draftMedia = draftMedia.filter(m => m.id !== b.dataset.id); renderDraftVoices();
+  });
+}
+
+/* ---- tag boxes ---- */
+function setupTagBox(boxId, getArr){
+  const box = $("#"+boxId), input = box.querySelector("input");
+  box.onclick = () => input.focus();
+  input.onfocus = () => box.classList.add("focus");
+  input.onblur  = () => { box.classList.remove("focus"); commit(); };
+  input.onkeydown = ev => {
+    if(ev.key === "Enter" || ev.key === ","){ ev.preventDefault(); commit(); }
+    else if(ev.key === "Backspace" && input.value === ""){
+      const arr = getArr(); arr.pop(); renderTagBoxes();
+    }
+  };
+  function commit(){
+    const v = input.value.trim().replace(/,$/,"").trim();
+    if(v){ const arr = getArr(); if(!arr.includes(v)) arr.push(v); input.value = ""; renderTagBoxes(); }
+  }
+}
+function renderTagBoxes(){
+  paintBox("#placeBox", draftPlace, "place");
+  paintBox("#timeBox",  draftTime,  "time");
+}
+function paintBox(sel, arr, kind){
+  const box = $(sel), input = box.querySelector("input");
+  box.querySelectorAll(".chip").forEach(c => c.remove());
+  arr.forEach((t, idx) => {
+    const c = document.createElement("span"); c.className = `chip ${kind}`;
+    c.innerHTML = `${escapeHTML(t)} <span class="x">&times;</span>`;
+    c.querySelector(".x").onclick = ev => { ev.stopPropagation(); arr.splice(idx,1); renderTagBoxes(); };
+    box.insertBefore(c, input);
+  });
+}
+setupTagBox("placeBox", () => draftPlace);
+setupTagBox("timeBox",  () => draftTime);
+
+/* ---- save / delete ---- */
+$("#saveBtn").onclick = async () => {
+  // capture any tag text still sitting in the inputs
+  ["#placeBox","#timeBox"].forEach(s => { const i = $(s).querySelector("input"); if(i.value.trim()){ const arr = s==="#placeBox"?draftPlace:draftTime; const v=i.value.trim(); if(!arr.includes(v)) arr.push(v); i.value=""; } });
+  stopRecording();
+
+  const existing = editingId ? entries.find(x => x.id === editingId) : null;
+  const entry = {
+    id: editingId || uid(),
+    title: $("#titleInput").value.trim(),
+    notes: $("#notesInput").value.trim(),
+    placeTags: [...draftPlace],
+    timeTags:  [...draftTime],
+    media: draftMedia.map(m => ({ id:m.id, kind:m.kind, blob:m.blob, mime:m.mime })),
+    createdAt: existing ? existing.createdAt : Date.now(),
+    updatedAt: Date.now()
+  };
+  if(entry.media.length === 0 && !entry.title && !entry.notes && !entry.placeTags.length && !entry.timeTags.length){
+    alert("Add at least a photo, a voice note, or some text before saving."); return;
+  }
+  await putEntry(entry);
+  entries = await getAll();
+  closeForm(); render();
+};
+$("#deleteBtn").onclick = async () => {
+  if(!editingId) return;
+  if(!confirm("Delete this keepsake for good? This can't be undone.")) return;
+  await deleteEntry(editingId);
+  entries = await getAll();
+  closeForm(); render();
+};
+
+/* ============================================================
+   6. OVERLAY HELPERS  (revoke object URLs on close to avoid leaks)
+   ============================================================ */
+function showOverlay(ov){ ov.classList.add("show"); document.body.style.overflow = "hidden"; }
+function hideOverlay(ov){
+  ov.classList.remove("show"); document.body.style.overflow = "";
+  // revoke unused URLs after the close animation, then re-render to rebuild needed ones
+  setTimeout(() => { if(!formOverlay.classList.contains("show") && !detailOverlay.classList.contains("show")){ clearURLs(); render(); } }, 260);
+}
+[formOverlay, detailOverlay].forEach(ov => ov.addEventListener("click", e => { if(e.target === ov){ ov === formOverlay ? closeForm() : closeDetail(); } }));
+document.addEventListener("keydown", e => { if(e.key === "Escape"){ if(formOverlay.classList.contains("show")) closeForm(); else if(detailOverlay.classList.contains("show")) closeDetail(); } });
+
+/* ============================================================
+   7. SEARCH + BOOT
+   ============================================================ */
+let searchDebounce;
+$("#searchInput").addEventListener("input", e => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => { searchTerm = e.target.value.trim().toLowerCase(); render(); }, 150);
+});
+
+(async function boot(){
+  // ask the browser to keep our data and not evict it (important for an archive)
+  if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(_){} }
+  await openDB();
+  entries = await getAll();
+  render();
+})();
+</script>
+</body>
+</html>
