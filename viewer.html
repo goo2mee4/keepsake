@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f5efe3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>Keepsake — Shared Collection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     KEEPSAKE — VIEWER  (read-only)
+     Reads manifest.json + media from Apps/Keepsake in Dropbox.
+     Cannot add, edit, or delete anything.
+     ============================================================ */
+  :root{
+    --paper:#f5efe3; --paper-2:#efe7d6; --card:#fbf7ee; --ink:#2a2521; --ink-soft:#756b5d;
+    --line:#e1d6c1; --line-2:#d6c9b0;
+    --place:#b5523a; --place-tint:#f1dcd2; --time:#3f7a6d; --time-tint:#d9e8e1;
+    --gold:#c08a2c;
+    --shadow:0 1px 2px rgba(58,46,33,.06), 0 8px 24px -12px rgba(58,46,33,.22);
+    --radius:16px; --maxw:1100px;
+    --serif:"Fraunces",Georgia,serif; --sans:"Hanken Grotesk",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:var(--sans); color:var(--ink); background-color:var(--paper);
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(192,138,44,.05), transparent 40%),
+      radial-gradient(circle at 90% 80%, rgba(63,122,109,.05), transparent 45%),
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+    min-height:100vh; -webkit-font-smoothing:antialiased; line-height:1.5;
+  }
+  button{ font-family:inherit; cursor:pointer; }
+
+  header.app{ max-width:var(--maxw); margin:0 auto; padding:32px 22px 8px; text-align:center; }
+  .logo{ font-family:var(--serif); font-style:italic; font-weight:500; font-size:clamp(36px,7vw,54px); line-height:1; margin:0; }
+  .logo .dot{ color:var(--place); }
+  .tagline{ color:var(--ink-soft); font-size:15px; margin:10px 0 0; font-style:italic; font-family:var(--serif); }
+  .count{ display:inline-block; margin-top:14px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--ink-soft); }
+  .count b{ color:var(--ink); font-weight:700; }
+
+  .toolbar{ max-width:var(--maxw); margin:18px auto 0; padding:0 22px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .search{ flex:1 1 240px; min-width:0; position:relative; }
+  .search input{ width:100%; padding:13px 16px 13px 42px; border:1px solid var(--line-2); border-radius:999px; background:var(--card); color:var(--ink); font-size:15px; font-family:inherit; outline:none; }
+  .search input:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(192,138,44,.15); }
+  .search svg{ position:absolute; left:15px; top:50%; transform:translateY(-50%); color:var(--ink-soft); }
+  .refresh-btn{ flex:0 0 auto; display:inline-flex; align-items:center; gap:8px; background:var(--card); color:var(--ink); border:1px solid var(--line-2); padding:12px 16px; border-radius:999px; font-size:14.5px; font-weight:600; }
+  .refresh-btn:hover{ border-color:var(--gold); background:#fffdf7; }
+  .refresh-btn svg{ width:16px; height:16px; color:var(--ink-soft); }
+  .refresh-btn[disabled]{ opacity:.55; }
+
+  .filters{ max-width:var(--maxw); margin:14px auto 0; padding:0 22px; display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .filters:empty{ display:none; }
+  .filters .lbl{ font-size:13px; color:var(--ink-soft); }
+  .clear-filters{ background:none; border:none; color:var(--place); font-size:13px; text-decoration:underline; }
+
+  .chip{ display:inline-flex; align-items:center; gap:6px; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:600; border:1px solid transparent; white-space:nowrap; }
+  .chip.place{ background:var(--place-tint); color:var(--place); border-color:#e7c6ba; }
+  .chip.time{ background:var(--time-tint); color:var(--time); border-color:#bcd7cc; }
+  .chip-btn{ cursor:pointer; }
+  .chip .x{ font-weight:700; opacity:.6; cursor:pointer; }
+
+  main{ max-width:var(--maxw); margin:0 auto; padding:22px; }
+  .gallery{ display:grid; gap:18px; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); cursor:pointer; transition:transform .16s, box-shadow .16s; display:flex; flex-direction:column; animation:rise .5s cubic-bezier(.2,.7,.2,1) both; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  .card:hover{ transform:translateY(-3px); box-shadow:0 2px 4px rgba(58,46,33,.08), 0 18px 34px -16px rgba(58,46,33,.32); }
+  .card .cover{ aspect-ratio:4/3; background:var(--paper-2); position:relative; overflow:hidden; display:flex; align-items:center; justify-content:center; }
+  .card .cover img, .card .cover video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .cover .placeholder{ color:var(--line-2); }
+  .cover .badges{ position:absolute; top:8px; right:8px; display:flex; gap:5px; }
+  .cover .badge{ background:rgba(42,37,33,.78); color:#fff; border-radius:999px; font-size:11px; font-weight:600; padding:3px 8px; display:flex; align-items:center; gap:4px; }
+  .card .body{ padding:13px 14px 15px; display:flex; flex-direction:column; gap:9px; }
+  .card .title{ font-family:var(--serif); font-weight:600; font-size:18px; line-height:1.25; margin:0; }
+  .card .title.untitled{ font-style:italic; color:var(--ink-soft); font-weight:400; }
+  .card .chips{ display:flex; flex-wrap:wrap; gap:5px; }
+  .card .date{ font-size:12px; color:var(--ink-soft); }
+
+  .empty{ text-align:center; padding:60px 20px; color:var(--ink-soft); grid-column:1/-1; }
+  .empty svg{ color:var(--line-2); margin-bottom:14px; }
+  .empty h2{ font-family:var(--serif); font-style:italic; font-weight:400; color:var(--ink); font-size:24px; margin:0 0 6px; }
+  .empty p{ margin:0 auto; max-width:380px; font-size:15px; }
+
+  .overlay{ position:fixed; inset:0; background:rgba(42,37,33,.42); backdrop-filter:blur(3px); display:flex; align-items:flex-end; justify-content:center; z-index:50; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+  @media(min-width:640px){ .overlay{ align-items:center; padding:24px; } }
+  .sheet{ background:var(--paper); width:100%; max-width:680px; max-height:92vh; overflow-y:auto; border-radius:22px 22px 0 0; box-shadow:0 -10px 50px -10px rgba(0,0,0,.4); transform:translateY(24px); transition:transform .25s cubic-bezier(.2,.7,.2,1); -webkit-overflow-scrolling:touch; }
+  @media(min-width:640px){ .sheet{ border-radius:22px; } }
+  .overlay.show .sheet{ transform:none; }
+  .sheet-head{ position:sticky; top:0; background:var(--paper); z-index:2; display:flex; align-items:center; justify-content:space-between; padding:18px 20px 14px; border-bottom:1px solid var(--line); }
+  .sheet-head h3{ font-family:var(--serif); font-style:italic; font-weight:500; font-size:22px; margin:0; }
+  .icon-btn{ border:none; background:var(--paper-2); color:var(--ink); width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; }
+  .icon-btn:hover{ background:var(--line); }
+  .sheet-body{ padding:20px; display:flex; flex-direction:column; gap:22px; }
+
+  .detail-media{ display:flex; flex-direction:column; gap:12px; }
+  .detail-media img, .detail-media video{ width:100%; border-radius:14px; background:#000; max-height:60vh; object-fit:contain; }
+  .detail-media .loading{ aspect-ratio:4/3; border-radius:14px; background:var(--paper-2); display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:14px; }
+  .detail-section h4{ font-size:12.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-soft); margin:0 0 9px; font-weight:700; }
+  .detail-title{ font-family:var(--serif); font-size:28px; font-weight:600; margin:0 0 4px; line-height:1.15; }
+  .detail-title.untitled{ font-style:italic; color:var(--ink-soft); font-weight:400; }
+  .detail-date{ font-size:13px; color:var(--ink-soft); margin:0; }
+  .detail-notes{ font-size:15.5px; line-height:1.6; white-space:pre-wrap; }
+  .detail-chips{ display:flex; flex-wrap:wrap; gap:7px; }
+  .voice-list{ display:flex; flex-direction:column; gap:9px; }
+  .voice-item{ display:flex; align-items:center; gap:10px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:9px 11px; }
+  .voice-item audio{ flex:1; height:34px; }
+  .voice-item .vname{ font-size:13.5px; font-weight:600; color:var(--ink-soft); }
+
+  /* connect panel */
+  .field label{ display:block; font-size:13px; font-weight:600; letter-spacing:.02em; color:var(--ink-soft); margin-bottom:8px; text-transform:uppercase; }
+  .field input[type=text]{ width:100%; padding:12px 14px; border:1px solid var(--line-2); border-radius:12px; background:var(--card); color:var(--ink); font-size:15.5px; font-family:inherit; outline:none; }
+  .field input[type=text]:focus{ border-color:var(--gold); box-shadow:0 0 0 3px rgba(192,138,44,.15); }
+  .hint{ font-size:12.5px; color:var(--ink-soft); margin:7px 0 0; }
+  #connectSetup .field{ margin-bottom:18px; }
+  .mono-row{ display:flex; gap:8px; align-items:stretch; }
+  .mono{ flex:1; min-width:0; background:var(--card); border:1px solid var(--line-2); border-radius:10px; padding:11px 12px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; word-break:break-all; }
+  .copy-btn{ flex:0 0 auto; border:1px solid var(--line-2); background:var(--card); border-radius:10px; padding:0 14px; font-size:13.5px; font-weight:600; }
+  .copy-btn:hover{ background:var(--paper-2); }
+  .status-box{ background:var(--paper-2); border:1px solid var(--line); border-radius:12px; padding:13px 15px; font-size:14.5px; line-height:1.55; color:var(--ink-soft); }
+  .btn{ padding:13px 22px; border-radius:999px; font-size:15px; font-weight:600; border:1px solid transparent; }
+  .btn-primary{ background:var(--ink); color:var(--paper); width:100%; }
+  .btn-primary:hover{ background:#1f1b17; }
+  .btn-primary[disabled]{ opacity:.6; }
+
+  .banner{ max-width:var(--maxw); margin:14px auto 0; padding:0 22px; }
+  .banner .msg{ background:var(--place-tint); border:1px solid #e7c6ba; color:var(--place); border-radius:12px; padding:11px 14px; font-size:14px; }
+  .spinner{ width:18px; height:18px; border-radius:50%; border:2.5px solid var(--line-2); border-top-color:var(--gold); animation:spin .8s linear infinite; display:inline-block; vertical-align:-3px; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <h1 class="logo">Keepsake<span class="dot">.</span></h1>
+  <p class="tagline">A collection, kept and shared.</p>
+  <div class="count" id="countWrap" style="display:none"><b id="countNum">0</b> things kept</div>
+</header>
+
+<div class="toolbar" id="toolbar" style="display:none">
+  <div class="search">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+    <input id="searchInput" type="text" placeholder="Search titles, notes, tags…" autocomplete="off">
+  </div>
+  <button class="refresh-btn" id="refreshBtn" title="Check for new items">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    Refresh
+  </button>
+</div>
+
+<div class="banner" id="banner"></div>
+<div class="filters" id="filters"></div>
+
+<main>
+  <div class="gallery" id="gallery"></div>
+</main>
+
+<!-- ===== DETAIL SHEET ===== -->
+<div class="overlay" id="detailOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h3>&nbsp;</h3>
+      <button class="icon-btn" id="detailClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="sheet-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- ===== CONNECT SHEET (first run) ===== -->
+<div class="overlay" id="connectOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h3>Open the shared collection</h3>
+    </div>
+    <div class="sheet-body">
+      <div class="status-box">This viewer shows a collection kept in Dropbox. The owner connects it once on this device — after that it just opens.</div>
+      <div id="connectSetup">
+        <div class="field">
+          <label>Dropbox app key</label>
+          <input id="appKeyInput" type="text" placeholder="paste the same app key" autocomplete="off">
+          <p class="hint">Use the same <b>App key</b> from the Keepsake Dropbox app.</p>
+        </div>
+        <div class="field">
+          <label>Redirect URI to register</label>
+          <div class="mono-row">
+            <code class="mono" id="redirectUri"></code>
+            <button class="copy-btn" id="copyRedirect" type="button">Copy</button>
+          </div>
+          <p class="hint">Add this exact line to the Dropbox app under <b>OAuth 2 → Redirect URIs</b> (in addition to the one already there).</p>
+        </div>
+        <button class="btn btn-primary" id="connectBtn">Connect Dropbox</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   STORAGE — small key/value store for the Dropbox token
+   ============================================================ */
+const DB_NAME = "keepsake-viewer", KV = "kv", DB_VERSION = 1;
+let _db = null;
+function openDB(){
+  return new Promise((res, rej) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = e => { const db = e.target.result; if(!db.objectStoreNames.contains(KV)) db.createObjectStore(KV); };
+    req.onsuccess = e => { _db = e.target.result; res(_db); };
+    req.onerror = e => rej(e.target.error);
+  });
+}
+const kvGet = k => new Promise((res, rej) => { const r = _db.transaction(KV,"readonly").objectStore(KV).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const kvSet = (k,v) => new Promise((res, rej) => { const r = _db.transaction(KV,"readwrite").objectStore(KV).put(v,k); r.onsuccess = res; r.onerror = () => rej(r.error); });
+const kvDel = k => new Promise((res, rej) => { const r = _db.transaction(KV,"readwrite").objectStore(KV).delete(k); r.onsuccess = res; r.onerror = () => rej(r.error); });
+
+/* ============================================================
+   DROPBOX (read-only) — same PKCE flow, only ever downloads
+   ============================================================ */
+const DBX_AUTH="https://www.dropbox.com/oauth2/authorize";
+const DBX_TOKEN="https://api.dropboxapi.com/oauth2/token";
+const DBX_DOWNLOAD="https://content.dropboxapi.com/2/files/download";
+const DBX_TEMPLINK="https://api.dropboxapi.com/2/files/get_temporary_link";
+const redirectURI = () => location.origin + location.pathname;
+
+let dbx = { appKey:null, refresh:null, access:null, expiry:0 };
+async function loadDbx(){
+  dbx.appKey = await kvGet("dbxAppKey") || null;
+  dbx.refresh = await kvGet("dbxRefresh") || null;
+  dbx.access = await kvGet("dbxAccess") || null;
+  dbx.expiry = await kvGet("dbxExpiry") || 0;
+}
+const isConnected = () => !!dbx.refresh;
+
+function randVerifier(){
+  const cs = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  const b = new Uint8Array(64); crypto.getRandomValues(b);
+  return Array.from(b, x => cs[x % cs.length]).join("");
+}
+const base64url = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+async function challenge(v){ return base64url(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v)))); }
+
+async function connectDropbox(appKey){
+  const v = randVerifier();
+  await kvSet("pkceVerifier", v); await kvSet("dbxAppKey", appKey);
+  location.href = DBX_AUTH + "?" + new URLSearchParams({
+    client_id:appKey, response_type:"code", token_access_type:"offline",
+    code_challenge: await challenge(v), code_challenge_method:"S256", redirect_uri:redirectURI()
+  });
+}
+async function handleRedirect(){
+  const code = new URLSearchParams(location.search).get("code");
+  if(!code) return false;
+  const v = await kvGet("pkceVerifier"), appKey = await kvGet("dbxAppKey");
+  history.replaceState({},"",redirectURI());
+  if(!v || !appKey) return false;
+  try{
+    const res = await fetch(DBX_TOKEN, { method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      body:new URLSearchParams({ code, grant_type:"authorization_code", client_id:appKey, code_verifier:v, redirect_uri:redirectURI() }) });
+    if(!res.ok) throw new Error("token exchange failed ("+res.status+")");
+    const t = await res.json();
+    dbx.refresh=t.refresh_token; dbx.access=t.access_token; dbx.expiry=Date.now()+(t.expires_in-60)*1000;
+    await kvSet("dbxRefresh",dbx.refresh); await kvSet("dbxAccess",dbx.access); await kvSet("dbxExpiry",dbx.expiry);
+    await kvDel("pkceVerifier");
+    return true;
+  }catch(err){ showBanner("Couldn't finish connecting: "+err.message); return false; }
+}
+async function accessToken(){
+  if(dbx.access && Date.now() < dbx.expiry) return dbx.access;
+  if(!dbx.refresh) throw new Error("Not connected.");
+  const res = await fetch(DBX_TOKEN, { method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+    body:new URLSearchParams({ grant_type:"refresh_token", refresh_token:dbx.refresh, client_id:dbx.appKey }) });
+  if(!res.ok) throw new Error("session refresh failed ("+res.status+")");
+  const t = await res.json();
+  dbx.access=t.access_token; dbx.expiry=Date.now()+(t.expires_in-60)*1000;
+  await kvSet("dbxAccess",dbx.access); await kvSet("dbxExpiry",dbx.expiry);
+  return dbx.access;
+}
+async function dbxDownloadText(path){
+  const res = await fetch(DBX_DOWNLOAD, { method:"POST",
+    headers:{ "Authorization":"Bearer "+(await accessToken()), "Dropbox-API-Arg":JSON.stringify({ path }) } });
+  if(res.status === 409) return null;   // not found yet
+  if(!res.ok) throw new Error("download failed ("+res.status+")");
+  return res.text();
+}
+const linkCache = new Map();
+async function tempLink(path){
+  const hit = linkCache.get(path);
+  if(hit && Date.now() < hit.exp) return hit.url;
+  const res = await fetch(DBX_TEMPLINK, { method:"POST",
+    headers:{ "Authorization":"Bearer "+(await accessToken()), "Content-Type":"application/json" },
+    body:JSON.stringify({ path }) });
+  if(!res.ok) throw new Error("link failed ("+res.status+")");
+  const url = (await res.json()).link;
+  linkCache.set(path, { url, exp:Date.now()+3*60*60*1000 });  // links last ~4h; cache 3h
+  return url;
+}
+
+/* ============================================================
+   DATA + RENDER
+   ============================================================ */
+let entries = [], searchTerm = "", activeFilters = new Set();
+const $ = s => document.querySelector(s);
+const escapeHTML = s => (s||"").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+const fmtDate = ts => new Date(ts).toLocaleDateString(undefined,{ year:"numeric", month:"long", day:"numeric" });
+function showBanner(msg){ $("#banner").innerHTML = msg ? `<div class="msg">${msg}</div>` : ""; }
+
+async function loadManifest(){
+  const text = await dbxDownloadText("/manifest.json");
+  if(text === null){ entries = []; return false; }   // nothing backed up yet
+  entries = (JSON.parse(text).entries || []);
+  return true;
+}
+
+function matches(e){
+  if(searchTerm){
+    const hay = [e.title, e.notes, ...(e.placeTags||[]), ...(e.timeTags||[])].join(" ").toLowerCase();
+    if(!hay.includes(searchTerm)) return false;
+  }
+  for(const f of activeFilters){
+    const [kind, ...rest] = f.split(":"); const val = rest.join(":");
+    const list = kind === "place" ? (e.placeTags||[]) : (e.timeTags||[]);
+    if(!list.includes(val)) return false;
+  }
+  return true;
+}
+const countMedia = (e,k) => (e.media||[]).filter(m => m.kind===k).length;
+
+let coverObserver = null;
+function render(){
+  $("#countNum").textContent = entries.length;
+  $("#countWrap").style.display = "inline-block";
+  $("#toolbar").style.display = "flex";
+
+  // filters bar
+  const fb = $("#filters"); fb.innerHTML = "";
+  if(activeFilters.size){
+    const l = document.createElement("span"); l.className="lbl"; l.textContent="Filtering by:"; fb.appendChild(l);
+    for(const f of activeFilters){
+      const [kind, ...rest] = f.split(":"); const val = rest.join(":");
+      const c = document.createElement("span"); c.className=`chip ${kind}`;
+      c.innerHTML = `${escapeHTML(val)} <span class="x">&times;</span>`;
+      c.querySelector(".x").onclick = () => { activeFilters.delete(f); render(); };
+      fb.appendChild(c);
+    }
+    const clr = document.createElement("button"); clr.className="clear-filters"; clr.textContent="clear all";
+    clr.onclick = () => { activeFilters.clear(); render(); }; fb.appendChild(clr);
+  }
+
+  if(coverObserver) coverObserver.disconnect();
+  coverObserver = new IntersectionObserver(onCoverVisible, { rootMargin:"200px" });
+
+  const list = entries.filter(matches).sort((a,b) => b.createdAt - a.createdAt);
+  const g = $("#gallery"); g.innerHTML = "";
+  if(list.length === 0){
+    g.innerHTML = `<div class="empty">
+      <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M20 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1z"/><path d="M8 7V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M3 12h18"/></svg>
+      <h2>${entries.length === 0 ? "Nothing here yet" : "Nothing matches"}</h2>
+      <p>${entries.length === 0 ? "Once the collection is backed up, it will appear here. Tap Refresh to check again." : "Try a different search or clear your filters."}</p>
+    </div>`;
+    return;
+  }
+  list.forEach((e,i) => {
+    const card = document.createElement("div");
+    card.className="card"; card.style.animationDelay = `${Math.min(i,12)*40}ms`;
+    const vids = countMedia(e,"video"), auds = countMedia(e,"audio");
+    const badges = [];
+    if(vids) badges.push(`<span class="badge">▶ ${vids}</span>`);
+    if(auds) badges.push(`<span class="badge">🎙 ${auds}</span>`);
+    const chips = [
+      ...(e.placeTags||[]).map(t => `<span class="chip place">${escapeHTML(t)}</span>`),
+      ...(e.timeTags||[]).map(t => `<span class="chip time">${escapeHTML(t)}</span>`)
+    ].slice(0,4).join("");
+    const cover = (e.media||[]).find(m => m.kind==="image") || (e.media||[]).find(m => m.kind==="video");
+    card.innerHTML = `
+      <div class="cover" data-file="${cover ? escapeHTML(cover.filename) : ""}" data-kind="${cover ? cover.kind : ""}">
+        ${cover ? "" : `<svg class="placeholder" width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 18V8a2 2 0 0 1 2-2h3l2-2h4l2 2h3a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>`}
+        <div class="badges">${badges.join("")}</div>
+      </div>
+      <div class="body">
+        <h3 class="title ${e.title?"":"untitled"}">${e.title ? escapeHTML(e.title) : "Untitled"}</h3>
+        <div class="chips">${chips}</div>
+        <div class="date">${fmtDate(e.createdAt)}</div>
+      </div>`;
+    card.onclick = () => openDetail(e.id);
+    g.appendChild(card);
+    const coverEl = card.querySelector(".cover");
+    if(cover) coverObserver.observe(coverEl);
+  });
+}
+
+async function onCoverVisible(items){
+  for(const it of items){
+    if(!it.isIntersecting) continue;
+    const el = it.target; coverObserver.unobserve(el);
+    const file = el.dataset.file, kind = el.dataset.kind; if(!file) continue;
+    try{
+      const url = await tempLink("/media/" + file);
+      const badges = el.querySelector(".badges");
+      const media = kind === "image"
+        ? Object.assign(document.createElement("img"), { src:url, alt:"" })
+        : Object.assign(document.createElement("video"), { src:url, muted:true, playsInline:true, preload:"metadata" });
+      el.insertBefore(media, badges);
+    }catch(_){ }
+  }
+}
+
+/* detail view */
+const detailOverlay = $("#detailOverlay");
+function showOverlay(o){ o.classList.add("show"); document.body.style.overflow="hidden"; }
+function hideOverlay(o){ o.classList.remove("show"); document.body.style.overflow=""; }
+$("#detailClose").onclick = () => hideOverlay(detailOverlay);
+detailOverlay.addEventListener("click", e => { if(e.target===detailOverlay) hideOverlay(detailOverlay); });
+document.addEventListener("keydown", e => { if(e.key==="Escape" && detailOverlay.classList.contains("show")) hideOverlay(detailOverlay); });
+
+async function openDetail(id){
+  const e = entries.find(x => x.id===id); if(!e) return;
+  const visual = (e.media||[]).filter(m => m.kind!=="audio");
+  const voices = (e.media||[]).filter(m => m.kind==="audio");
+  const tagHTML = (e.placeTags?.length || e.timeTags?.length) ? `
+    <div class="detail-section"><h4>Tags</h4><div class="detail-chips">
+      ${(e.placeTags||[]).map(t => `<span class="chip place chip-btn" data-f="place:${escapeHTML(t)}">${escapeHTML(t)}</span>`).join("")}
+      ${(e.timeTags||[]).map(t => `<span class="chip time chip-btn" data-f="time:${escapeHTML(t)}">${escapeHTML(t)}</span>`).join("")}
+    </div></div>` : "";
+  $("#detailBody").innerHTML = `
+    ${visual.length ? `<div class="detail-media" id="dmedia">${visual.map(()=>`<div class="loading"><span class="spinner"></span></div>`).join("")}</div>` : ""}
+    <div class="detail-section">
+      <h3 class="detail-title ${e.title?"":"untitled"}">${e.title ? escapeHTML(e.title) : "Untitled"}</h3>
+      <p class="detail-date">${fmtDate(e.createdAt)}</p>
+    </div>
+    ${voices.length ? `<div class="detail-section"><h4>Voice notes</h4><div class="voice-list" id="dvoices">
+      ${voices.map((m,i)=>`<div class="voice-item"><span class="vname">No. ${i+1}</span><audio controls data-file="${escapeHTML(m.filename)}"></audio></div>`).join("")}
+    </div></div>` : ""}
+    ${e.notes ? `<div class="detail-section"><h4>Note</h4><div class="detail-notes">${escapeHTML(e.notes)}</div></div>` : ""}
+    ${tagHTML}`;
+  $("#detailBody").querySelectorAll(".chip-btn").forEach(c => c.onclick = () => { activeFilters.add(c.dataset.f); hideOverlay(detailOverlay); render(); window.scrollTo({top:0,behavior:"smooth"}); });
+  showOverlay(detailOverlay);
+
+  // load media via temporary links
+  const holder = $("#dmedia");
+  if(holder){
+    visual.forEach(async (m, idx) => {
+      try{
+        const url = await tempLink("/media/" + m.filename);
+        const el = m.kind === "image"
+          ? Object.assign(document.createElement("img"), { src:url, alt:"" })
+          : Object.assign(document.createElement("video"), { src:url, controls:true, playsInline:true });
+        holder.children[idx].replaceWith(el);
+      }catch(_){ holder.children[idx].textContent = "Couldn't load this item."; }
+    });
+  }
+  $("#dvoices") && $("#dvoices").querySelectorAll("audio").forEach(async a => {
+    try{ a.src = await tempLink("/media/" + a.dataset.file); }catch(_){ }
+  });
+}
+
+/* search + refresh */
+let sd;
+$("#searchInput").addEventListener("input", e => { clearTimeout(sd); sd = setTimeout(() => { searchTerm = e.target.value.trim().toLowerCase(); render(); }, 150); });
+$("#refreshBtn").onclick = async () => {
+  const b = $("#refreshBtn"); b.disabled = true; b.innerHTML = `<span class="spinner"></span> Checking…`;
+  try{ linkCache.clear(); await loadManifest(); render(); showBanner(""); }
+  catch(err){ showBanner("Couldn't refresh: " + err.message); }
+  finally{ b.disabled = false; b.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg> Refresh`; }
+};
+
+/* connect panel */
+const connectOverlay = $("#connectOverlay");
+$("#copyRedirect").onclick = async () => { try{ await navigator.clipboard.writeText(redirectURI()); $("#copyRedirect").textContent="Copied!"; setTimeout(()=>$("#copyRedirect").textContent="Copy",1500);}catch(_){ } };
+$("#connectBtn").onclick = async () => {
+  const key = $("#appKeyInput").value.trim();
+  if(!key){ alert("Paste the Dropbox app key first."); return; }
+  await connectDropbox(key);
+};
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+(async function boot(){
+  await openDB();
+  await loadDbx();
+  const justConnected = await handleRedirect();
+  if(justConnected) await loadDbx();
+  $("#redirectUri").textContent = redirectURI();
+
+  if(!isConnected()){ showOverlay(connectOverlay); return; }
+
+  try{
+    const had = await loadManifest();
+    render();
+    if(!had) showBanner("Connected. Nothing has been backed up to this collection yet.");
+  }catch(err){
+    showBanner("Couldn't open the collection: " + err.message);
+    render();
+  }
+})();
+</script>
+</body>
+</html>
