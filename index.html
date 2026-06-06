@@ -300,6 +300,33 @@
   .detail-notes{ font-size:15.5px; line-height:1.6; white-space:pre-wrap; color:var(--ink); }
   .detail-chips{ display:flex; flex-wrap:wrap; gap:7px; }
 
+  /* ---------- backup button + settings ---------- */
+  .backup-btn{
+    flex:0 0 auto; display:inline-flex; align-items:center; gap:8px;
+    background:var(--card); color:var(--ink); border:1px solid var(--line-2);
+    padding:12px 16px; border-radius:999px; font-size:14.5px; font-weight:600;
+    transition:border-color .15s, background .15s;
+  }
+  .backup-btn:hover{ border-color:var(--gold); background:#fffdf7; }
+  .backup-btn svg{ width:17px; height:17px; color:var(--ink-soft); }
+  .dot-status{ width:9px; height:9px; border-radius:50%; background:var(--line-2); flex:0 0 auto; }
+  .dot-status.off{ background:var(--line-2); }
+  .dot-status.ok{ background:var(--time); }
+  .dot-status.working{ background:var(--gold); animation:pulse 1s infinite; }
+
+  .status-box{ background:var(--paper-2); border:1px solid var(--line); border-radius:12px; padding:13px 15px; font-size:14.5px; line-height:1.55; color:var(--ink-soft); }
+  .status-box.ok{ background:var(--time-tint); border-color:#bcd7cc; color:var(--time); }
+  .status-box.ok b{ color:var(--time); }
+  #bkSetup .field{ margin-bottom:18px; }
+  .mono-row{ display:flex; gap:8px; align-items:stretch; }
+  .mono{ flex:1; min-width:0; background:var(--card); border:1px solid var(--line-2); border-radius:10px; padding:11px 12px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12.5px; word-break:break-all; color:var(--ink); }
+  .copy-btn{ flex:0 0 auto; border:1px solid var(--line-2); background:var(--card); border-radius:10px; padding:0 14px; font-size:13.5px; font-weight:600; color:var(--ink); cursor:pointer; }
+  .copy-btn:hover{ background:var(--paper-2); }
+  .bk-progress{ font-size:14px; color:var(--ink-soft); padding:12px 2px 4px; }
+  .toggle{ display:flex; align-items:center; gap:10px; margin-top:16px; font-size:14.5px; color:var(--ink); cursor:pointer; }
+  .toggle input{ width:18px; height:18px; accent-color:var(--time); flex:0 0 auto; }
+  #bkConnected .btn-danger{ display:block; margin-left:auto; margin-top:8px; }
+
   .visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 </style>
 </head>
@@ -319,6 +346,11 @@
   <button class="btn-add" id="addBtn">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
     Add something
+  </button>
+  <button class="backup-btn" id="backupBtn" title="Backup to Dropbox">
+    <span class="dot-status off" id="bkDot"></span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17 8.5a4.5 4.5 0 0 1 .5 8.96"/><path d="M12 17v-6M9.5 13.5 12 11l2.5 2.5"/></svg>
+    <span id="bkLabel">Backup</span>
   </button>
 </div>
 
@@ -418,12 +450,57 @@
   </div>
 </div>
 
+<!-- ===== BACKUP / SETTINGS SHEET ===== -->
+<div class="overlay" id="settingsOverlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-head">
+      <h3>Backup to Dropbox</h3>
+      <button class="icon-btn" id="settingsClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="sheet-body">
+
+      <div id="bkStatusBox" class="status-box"></div>
+
+      <!-- SETUP (shown when not connected) -->
+      <div id="bkSetup">
+        <div class="field">
+          <label>Step 1 · Your Dropbox app key</label>
+          <input id="appKeyInput" type="text" placeholder="paste your app key here" autocomplete="off">
+          <p class="hint">Create a free Dropbox app with <b>App folder</b> access, then paste its <b>App key</b> here. The full walk-through is in our chat.</p>
+        </div>
+        <div class="field">
+          <label>Step 2 · Redirect URI to register</label>
+          <div class="mono-row">
+            <code class="mono" id="redirectUri"></code>
+            <button class="copy-btn" id="copyRedirect" type="button">Copy</button>
+          </div>
+          <p class="hint">In your Dropbox app's <b>Settings</b> tab, paste this exact line into <b>OAuth 2 → Redirect URIs</b> and click Add.</p>
+        </div>
+        <button class="btn btn-primary" id="connectBtn" style="width:100%">Connect Dropbox</button>
+      </div>
+
+      <!-- CONNECTED (shown when connected) -->
+      <div id="bkConnected" style="display:none">
+        <button class="btn btn-primary" id="backupNowBtn" style="width:100%">Back up now</button>
+        <div id="bkProgress" class="bk-progress" style="display:none"></div>
+        <label class="toggle">
+          <input type="checkbox" id="autoBackupToggle">
+          <span>Back up automatically after I save each item</span>
+        </label>
+        <button class="btn-danger" id="disconnectBtn">Disconnect Dropbox</button>
+      </div>
+
+      <p class="hint" style="margin-top:6px">Everything uploads to <b>Apps/Keepsake</b> in your own Dropbox. The connection key is stored only on this device — never in the repository.</p>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ============================================================
    1. STORAGE  —  IndexedDB wrapper
    Entries and their media blobs all live on this device.
    ============================================================ */
-const DB_NAME = "keepsake", STORE = "entries", DB_VERSION = 1;
+const DB_NAME = "keepsake", STORE = "entries", KV = "kv", DB_VERSION = 2;
 let _db = null;
 
 function openDB(){
@@ -431,13 +508,22 @@ function openDB(){
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = e => {
       const db = e.target.result;
-      if(!db.objectStoreNames.contains(STORE)){
-        db.createObjectStore(STORE, { keyPath:"id" });
-      }
+      if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath:"id" });
+      if(!db.objectStoreNames.contains(KV))    db.createObjectStore(KV);   // plain key -> value
     };
     req.onsuccess = e => { _db = e.target.result; resolve(_db); };
     req.onerror   = e => reject(e.target.error);
   });
+}
+/* tiny key/value store for settings, Dropbox tokens, and sync bookkeeping */
+function kvGet(key){
+  return new Promise((res, rej) => { const r = _db.transaction(KV,"readonly").objectStore(KV).get(key); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+}
+function kvSet(key, val){
+  return new Promise((res, rej) => { const r = _db.transaction(KV,"readwrite").objectStore(KV).put(val, key); r.onsuccess = res; r.onerror = () => rej(r.error); });
+}
+function kvDel(key){
+  return new Promise((res, rej) => { const r = _db.transaction(KV,"readwrite").objectStore(KV).delete(key); r.onsuccess = res; r.onerror = () => rej(r.error); });
 }
 function tx(mode){ return _db.transaction(STORE, mode).objectStore(STORE); }
 function putEntry(entry){
@@ -777,6 +863,7 @@ $("#saveBtn").onclick = async () => {
   await putEntry(entry);
   entries = await getAll();
   closeForm(); render();
+  maybeAutoBackup();   // fire-and-forget if Dropbox is connected + auto is on
 };
 $("#deleteBtn").onclick = async () => {
   if(!editingId) return;
@@ -785,6 +872,175 @@ $("#deleteBtn").onclick = async () => {
   entries = await getAll();
   closeForm(); render();
 };
+
+/* ============================================================
+   5.5  DROPBOX BACKUP  (client-side PKCE OAuth + upload)
+   Uploads media + a manifest.json to Apps/Keepsake in YOUR Dropbox.
+   No server and no app secret — PKCE keeps the flow secret-free.
+   ============================================================ */
+const DBX_AUTH   = "https://www.dropbox.com/oauth2/authorize";
+const DBX_TOKEN  = "https://api.dropboxapi.com/oauth2/token";
+const DBX_UPLOAD = "https://content.dropboxapi.com/2/files/upload";
+const DBX_USTART  = "https://content.dropboxapi.com/2/files/upload_session/start";
+const DBX_UAPPEND = "https://content.dropboxapi.com/2/files/upload_session/append_v2";
+const DBX_UFINISH = "https://content.dropboxapi.com/2/files/upload_session/finish";
+const CHUNK = 8 * 1024 * 1024;            // 8 MB chunks for large files
+const SINGLE_SHOT_MAX = 140 * 1024 * 1024;
+
+const redirectURI = () => location.origin + location.pathname;   // must match Dropbox console exactly
+
+let dbx = { appKey:null, refresh:null, access:null, expiry:0, auto:true, uploaded:new Set(), lastBackup:0 };
+
+async function loadDbxState(){
+  dbx.appKey  = await kvGet("dbxAppKey")  || null;
+  dbx.refresh = await kvGet("dbxRefresh") || null;
+  dbx.access  = await kvGet("dbxAccess")  || null;
+  dbx.expiry  = await kvGet("dbxExpiry")  || 0;
+  const auto  = await kvGet("autoBackup"); dbx.auto = auto === undefined ? true : !!auto;
+  dbx.uploaded = new Set(await kvGet("uploaded") || []);
+  dbx.lastBackup = await kvGet("lastBackup") || 0;
+}
+const isConnected = () => !!dbx.refresh;
+
+/* ---- PKCE helpers ---- */
+function randVerifier(){
+  const cs = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  const bytes = new Uint8Array(64); crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => cs[b % cs.length]).join("");
+}
+function base64url(bytes){
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
+async function challenge(verifier){
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return base64url(new Uint8Array(digest));
+}
+
+/* ---- start the OAuth flow (leaves the page, returns with ?code=) ---- */
+async function connectDropbox(appKey){
+  const verifier = randVerifier();
+  await kvSet("pkceVerifier", verifier);
+  await kvSet("dbxAppKey", appKey);
+  const url = DBX_AUTH + "?" + new URLSearchParams({
+    client_id: appKey, response_type: "code", token_access_type: "offline",
+    code_challenge: await challenge(verifier), code_challenge_method: "S256",
+    redirect_uri: redirectURI()
+  });
+  location.href = url;
+}
+
+/* ---- finish the flow on return ---- */
+async function handleRedirect(){
+  const code = new URLSearchParams(location.search).get("code");
+  if(!code) return false;
+  const verifier = await kvGet("pkceVerifier");
+  const appKey = await kvGet("dbxAppKey");
+  history.replaceState({}, "", redirectURI());   // strip ?code= from the address bar
+  if(!verifier || !appKey) return false;
+  try{
+    const res = await fetch(DBX_TOKEN, {
+      method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ code, grant_type:"authorization_code", client_id:appKey, code_verifier:verifier, redirect_uri:redirectURI() })
+    });
+    if(!res.ok) throw new Error("token exchange failed ("+res.status+")");
+    const t = await res.json();
+    dbx.refresh = t.refresh_token; dbx.access = t.access_token;
+    dbx.expiry = Date.now() + (t.expires_in - 60) * 1000;
+    await kvSet("dbxRefresh", dbx.refresh);
+    await kvSet("dbxAccess", dbx.access);
+    await kvSet("dbxExpiry", dbx.expiry);
+    await kvDel("pkceVerifier");
+    return true;
+  }catch(err){ alert("Couldn't finish connecting to Dropbox: " + err.message); return false; }
+}
+
+/* ---- a valid access token, refreshing if needed ---- */
+async function accessToken(){
+  if(dbx.access && Date.now() < dbx.expiry) return dbx.access;
+  if(!dbx.refresh) throw new Error("Not connected to Dropbox.");
+  const res = await fetch(DBX_TOKEN, {
+    method:"POST", headers:{ "Content-Type":"application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type:"refresh_token", refresh_token:dbx.refresh, client_id:dbx.appKey })
+  });
+  if(!res.ok) throw new Error("couldn't refresh Dropbox session ("+res.status+")");
+  const t = await res.json();
+  dbx.access = t.access_token;
+  dbx.expiry = Date.now() + (t.expires_in - 60) * 1000;
+  await kvSet("dbxAccess", dbx.access);
+  await kvSet("dbxExpiry", dbx.expiry);
+  return dbx.access;
+}
+
+/* ---- filenames (kept ASCII so Dropbox-API-Arg needs no escaping) ---- */
+const MIME_EXT = { "image/jpeg":"jpg","image/png":"png","image/heic":"heic","image/webp":"webp","image/gif":"gif",
+                   "video/mp4":"mp4","video/quicktime":"mov","video/webm":"webm",
+                   "audio/webm":"webm","audio/mp4":"m4a","audio/mpeg":"mp3","audio/ogg":"ogg","audio/wav":"wav" };
+const extFor = m => MIME_EXT[(m||"").split(";")[0]] || "bin";
+const fileNameFor = (entryId, m) => entryId + "_" + m.id + "." + extFor(m.mime);
+
+/* ---- upload one blob (single shot, or chunked session if large) ---- */
+async function dbxUpload(path, blob){
+  if(blob.size <= SINGLE_SHOT_MAX){
+    const res = await fetch(DBX_UPLOAD, {
+      method:"POST",
+      headers:{ "Authorization":"Bearer "+(await accessToken()),
+        "Dropbox-API-Arg": JSON.stringify({ path, mode:"overwrite", autorename:false, mute:true }),
+        "Content-Type":"application/octet-stream" },
+      body: blob
+    });
+    if(!res.ok) throw new Error("upload failed ("+res.status+"): "+(await res.text()).slice(0,160));
+    return;
+  }
+  // large file -> upload session
+  let offset = 0;
+  const first = blob.slice(0, CHUNK);
+  let res = await fetch(DBX_USTART, {
+    method:"POST", headers:{ "Authorization":"Bearer "+(await accessToken()),
+      "Dropbox-API-Arg": JSON.stringify({ close:false }), "Content-Type":"application/octet-stream" },
+    body: first });
+  if(!res.ok) throw new Error("upload start failed ("+res.status+")");
+  const sessionId = (await res.json()).session_id;
+  offset += first.size;
+  while(offset < blob.size){
+    const chunk = blob.slice(offset, offset + CHUNK);
+    const last = offset + chunk.size >= blob.size;
+    const arg = last
+      ? { cursor:{ session_id:sessionId, offset }, commit:{ path, mode:"overwrite", autorename:false, mute:true } }
+      : { cursor:{ session_id:sessionId, offset }, close:false };
+    res = await fetch(last ? DBX_UFINISH : DBX_UAPPEND, {
+      method:"POST", headers:{ "Authorization":"Bearer "+(await accessToken()),
+        "Dropbox-API-Arg": JSON.stringify(arg), "Content-Type":"application/octet-stream" },
+      body: chunk });
+    if(!res.ok) throw new Error("upload "+(last?"finish":"chunk")+" failed ("+res.status+")");
+    offset += chunk.size;
+  }
+}
+
+/* ---- the full backup: upload new media, then overwrite manifest.json ---- */
+let backingUp = false;
+async function runBackup(progress){
+  if(backingUp) return; backingUp = true;
+  try{
+    const all = await getAll();
+    const jobs = [];
+    for(const e of all) for(const m of (e.media||[])){ const fn = fileNameFor(e.id, m); if(!dbx.uploaded.has(fn)) jobs.push({ m, fn }); }
+    let done = 0;
+    for(const job of jobs){
+      progress && progress(`Uploading media ${done+1} of ${jobs.length}…`);
+      await dbxUpload("/media/" + job.fn, job.m.blob);
+      dbx.uploaded.add(job.fn); await kvSet("uploaded", [...dbx.uploaded]); done++;
+    }
+    progress && progress("Saving index…");
+    const manifest = { version:1, updatedAt:Date.now(), entries: all.map(e => ({
+      id:e.id, title:e.title, notes:e.notes, placeTags:e.placeTags||[], timeTags:e.timeTags||[],
+      createdAt:e.createdAt, updatedAt:e.updatedAt,
+      media:(e.media||[]).map(m => ({ id:m.id, kind:m.kind, mime:m.mime, filename:fileNameFor(e.id, m) }))
+    })) };
+    await dbxUpload("/manifest.json", new Blob([JSON.stringify(manifest)], { type:"application/json" }));
+    dbx.lastBackup = Date.now(); await kvSet("lastBackup", dbx.lastBackup);
+    progress && progress("Backed up · " + new Date(dbx.lastBackup).toLocaleString());
+  } finally { backingUp = false; }
+}
 
 /* ============================================================
    6. OVERLAY HELPERS  (revoke object URLs on close to avoid leaks)
@@ -796,7 +1052,7 @@ function hideOverlay(ov){
   setTimeout(() => { if(!formOverlay.classList.contains("show") && !detailOverlay.classList.contains("show")){ clearURLs(); render(); } }, 260);
 }
 [formOverlay, detailOverlay].forEach(ov => ov.addEventListener("click", e => { if(e.target === ov){ ov === formOverlay ? closeForm() : closeDetail(); } }));
-document.addEventListener("keydown", e => { if(e.key === "Escape"){ if(formOverlay.classList.contains("show")) closeForm(); else if(detailOverlay.classList.contains("show")) closeDetail(); } });
+document.addEventListener("keydown", e => { if(e.key === "Escape"){ if(formOverlay.classList.contains("show")) closeForm(); else if(detailOverlay.classList.contains("show")) closeDetail(); else if(settingsOverlay.classList.contains("show")) hideOverlay(settingsOverlay); } });
 
 /* ============================================================
    7. SEARCH + BOOT
@@ -807,12 +1063,83 @@ $("#searchInput").addEventListener("input", e => {
   searchDebounce = setTimeout(() => { searchTerm = e.target.value.trim().toLowerCase(); render(); }, 150);
 });
 
+/* ============================================================
+   8. BACKUP UI
+   ============================================================ */
+const settingsOverlay = $("#settingsOverlay");
+$("#backupBtn").onclick = () => { updateBackupUI(); showOverlay(settingsOverlay); };
+$("#settingsClose").onclick = () => hideOverlay(settingsOverlay);
+settingsOverlay.addEventListener("click", e => { if(e.target === settingsOverlay) hideOverlay(settingsOverlay); });
+
+const fmtWhen = ts => ts ? new Date(ts).toLocaleString() : "never";
+
+function updateBackupDot(){
+  const dot = $("#bkDot"), label = $("#bkLabel"); if(!dot) return;
+  if(!isConnected()){ dot.className = "dot-status off"; label.textContent = "Backup"; }
+  else { dot.className = "dot-status ok"; label.textContent = "Backed up"; }
+}
+function updateBackupUI(){
+  $("#redirectUri").textContent = redirectURI();
+  const connected = isConnected();
+  $("#bkSetup").style.display     = connected ? "none" : "block";
+  $("#bkConnected").style.display = connected ? "block" : "none";
+  if(!connected && dbx.appKey) $("#appKeyInput").value = dbx.appKey;
+  $("#autoBackupToggle").checked = dbx.auto;
+  const box = $("#bkStatusBox");
+  if(connected){
+    box.className = "status-box ok";
+    box.innerHTML = `<b>Connected to Dropbox.</b><br>Last backup: ${fmtWhen(dbx.lastBackup)}`;
+  } else {
+    box.className = "status-box";
+    box.textContent = "Not connected yet. Connect your Dropbox to keep a safe copy of everything off your phone.";
+  }
+  updateBackupDot();
+}
+
+$("#copyRedirect").onclick = async () => {
+  try{ await navigator.clipboard.writeText(redirectURI()); $("#copyRedirect").textContent = "Copied!"; setTimeout(() => $("#copyRedirect").textContent = "Copy", 1500); }catch(_){ }
+};
+$("#connectBtn").onclick = async () => {
+  const key = $("#appKeyInput").value.trim();
+  if(!key){ alert("Paste your Dropbox app key first."); return; }
+  await connectDropbox(key);   // redirects away to Dropbox
+};
+$("#backupNowBtn").onclick = async () => {
+  const prog = $("#bkProgress"); prog.style.display = "block";
+  $("#backupNowBtn").disabled = true;
+  const dot = $("#bkDot"); if(dot) dot.className = "dot-status working";
+  try{ await runBackup(msg => prog.textContent = msg); updateBackupUI(); }
+  catch(err){ prog.textContent = "Backup error: " + err.message; }
+  finally{ $("#backupNowBtn").disabled = false; updateBackupDot(); }
+};
+$("#autoBackupToggle").onchange = async e => { dbx.auto = e.target.checked; await kvSet("autoBackup", dbx.auto); };
+$("#disconnectBtn").onclick = async () => {
+  if(!confirm("Disconnect Dropbox on this device? Your backed-up files stay safe in Dropbox.")) return;
+  dbx.refresh = dbx.access = null; dbx.expiry = 0;
+  await kvDel("dbxRefresh"); await kvDel("dbxAccess"); await kvDel("dbxExpiry");
+  updateBackupUI();
+};
+
+async function maybeAutoBackup(){
+  if(!isConnected() || !dbx.auto) return;
+  const dot = $("#bkDot"), label = $("#bkLabel");
+  if(dot) dot.className = "dot-status working";
+  if(label) label.textContent = "Backing up…";
+  try{ await runBackup(); }catch(_){ }
+  updateBackupDot();
+}
+
 (async function boot(){
   // ask the browser to keep our data and not evict it (important for an archive)
   if(navigator.storage && navigator.storage.persist){ try{ await navigator.storage.persist(); }catch(_){} }
   await openDB();
+  await loadDbxState();
+  const justConnected = await handleRedirect();   // returning from Dropbox with ?code=
+  if(justConnected) await loadDbxState();
   entries = await getAll();
   render();
+  updateBackupDot();
+  if(justConnected){ updateBackupUI(); showOverlay(settingsOverlay); }   // land them on "Back up now"
 })();
 </script>
 </body>
